@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Life Changer" />
+  <meta name="theme-color" content="#050514" />
+  <title>Life Changer — 225 Day Transformation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=DM+Sans:wght@300;400;600;700&display=swap" rel="stylesheet" />
+  
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: #050514; overflow-x: hidden; }
+    #root { min-height: 100vh; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #ffffff20; border-radius: 4px; }
+    @keyframes spin    { to { transform: rotate(360deg); } }
+    @keyframes fall    { to { transform: translateY(110vh) rotate(720deg); opacity: 0; } }
+    @keyframes popIn   { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    @keyframes fadeUp  { from { transform: translateY(14px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    input[type=range] { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; outline: none; cursor: pointer; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid #050514; }
+    input[type=time] { color-scheme: dark; }
+    input[type=time]::-webkit-calendar-picker-indicator { filter: invert(1) opacity(0.5); cursor: pointer; }
+    input[type=text], input[type=time] { -webkit-appearance: none; }
+    
+    /* Login Screen Styles */
+    .auth-overlay { position: fixed; inset: 0; background: #050514; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; font-family: 'DM Sans', sans-serif; }
+    .login-card { background: #ffffff08; border: 1px solid #D4AF3744; padding: 40px 20px; borderRadius: 24px; maxWidth: 320px; width: 100%; backdropFilter: blur(10px); }
+    .btn-login { background: #D4AF37; color: #000; border: none; padding: 16px 32px; border-radius: 14px; font-weight: 700; cursor: pointer; font-size: 15px; margin-top: 30px; width: 100%; transition: transform 0.2s; }
+    .btn-login:active { transform: scale(0.98); }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+// --- FIREBASE CONFIG ---
+const firebaseConfig = {
+  apiKey: "AIzaSyAvEKjaHfYXCKjVgGnKWkp7iZJege7Y0qY",
+  authDomain: "lifechanger-12e1d.firebaseapp.com",
+  projectId: "lifechanger-12e1d",
+  storageBucket: "lifechanger-12e1d.firebasestorage.app",
+  messagingSenderId: "718417080005",
+  appId: "1:718417080005:web:4809e883a9d19483ce4aac"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+const TOTAL_LEVELS   = 15;
+
+const BASE_THEMES = [
+  { name:"The Awakening",     color:"#FF6B6B", icon:"🌱" },
+  { name:"The Stirring",      color:"#FF8E53", icon:"🔥" },
+  { name:"The Rising",        color:"#FFA726", icon:"🌄" },
+  { name:"The Clearing",      color:"#FFCC02", icon:"⚡" },
+  { name:"The Grounding",     color:"#A8E063", icon:"🌿" },
+  { name:"The Flow",          color:"#56E39F", icon:"💧" },
+  { name:"The Discipline",    color:"#11C5CF", icon:"🧊" },
+  { name:"The Focus",         color:"#29B6F6", icon:"🎯" },
+  { name:"The Mastery",       color:"#5C6BC0", icon:"🔮" },
+  { name:"The Clarity",       color:"#7E57C2", icon:"💎" },
+  { name:"The Balance",       color:"#AB47BC", icon:"⚖️" },
+  { name:"The Transcendence", color:"#EC407A", icon:"🦋" },
+  { name:"The Warrior",       color:"#D4AF37", icon:"⚔️" },
+  { name:"The Sage",          color:"#F5E27A", icon:"🌟" },
+  { name:"The Transformed",   color:"#FFFFFF", icon:"👑" },
+];
+
+const CAT_COLORS = { sleep:"#8B9FE8", yoga:"#56E39F", study:"#FFA726", health:"#EC407A" };
+const DEFAULT_PROGRESS = { currentLevel:1, currentDay:1, tasks:{}, completedLevels:[] };
+
+/* ── Helpers ── */
+function makeDefaultConfigs() {
+  const c = {};
+  for (let lv = 1; lv <= TOTAL_LEVELS; lv++) {
+    const i = lv - 1;
+    const sm = ((- i * 15) + 14400) % 1440;
+    const wm = 9 * 60 - i * 15;
+    c[lv] = {
+      name: BASE_THEMES[i].name,
+      icon: BASE_THEMES[i].icon,
+      color: BASE_THEMES[i].color,
+      sleepH: Math.floor(sm/60), sleepM: sm%60,
+      wakeH:  Math.floor(wm/60), wakeM:  wm%60,
+      yogaMins:  15 + i*5,
+      studyMins: 15 + i*5,
+      studySessions: 4,
+      walkMins:  15 + i*5,
+      days: 15,
+    };
+  }
+  return c;
+}
+
+function fmt12(h, m) {
+  const ap = h >= 12 ? "PM" : "AM";
+  return `${h%12||12}:${m.toString().padStart(2,"0")} ${ap}`;
+}
+function toHHMM(h, m) { return `${h.toString().padStart(2,"0")}:${m.toString().padStart(2,"0")}`; }
+function fromHHMM(s) { const [h,m]=s.split(":").map(Number); return {h:isNaN(h)?0:h, m:isNaN(m)?0:m}; }
+
+function buildTasks(cfg) {
+  const rows = [
+    {id:"sleep", icon:"🌙", label:"Sleep by",      value:fmt12(cfg.sleepH,cfg.sleepM), cat:"sleep"},
+    {id:"wake",  icon:"🌅", label:"Wake up by",     value:fmt12(cfg.wakeH, cfg.wakeM),  cat:"sleep"},
+    {id:"yoga",  icon:"🧘", label:"Yoga",           value:`${cfg.yogaMins} min`,         cat:"yoga"},
+  ];
+  for (let s = 1; s <= cfg.studySessions; s++)
+    rows.push({id:`s${s}`, icon:"📖", label:`Study — Session ${s}`, value:`${cfg.studyMins} min`, cat:"study"});
+  rows.push({id:"walk", icon:"🚶", label:"Walk", value:`${cfg.walkMins} min`, cat:"health"});
+  return rows;
+}
+
+/* ── Confetti ── */
+function Confetti({ active, color }) {
+  if (!active) return null;
+  return (
+    <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:999,overflow:"hidden"}}>
+      {Array.from({length:40},(_,i)=>(
+        <div key={i} style={{position:"absolute",left:`${(i/40)*100}%`,top:"-12px",width:8,height:8,
+          borderRadius:i%3===0?"50%":2,
+          background:[color,"#FFD700","#fff","#FF6B6B","#56E39F"][i%5],
+          animation:`fall ${1.2+(i%5)*.25}s ease-in ${(i%7)*.07}s forwards`}} />
+      ))}
+    </div>
+  );
+}
+
+/* ── Slider ── */
+function SliderRow({ label, value, min, max, step=5, color, onChange }) {
+  const pct = ((value-min)/(max-min))*100;
+  return (
+    <div style={{marginBottom:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+        <span style={{fontSize:12,color:"#ffffff80"}}>{label}</span>
+        <span style={{fontSize:13,fontWeight:700,color}}>{value} min</span>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={e=>onChange(+e.target.value)}
+        style={{width:"100%",background:`linear-gradient(90deg,${color} ${pct}%,#ffffff18 0%)`}} />
+      <style>{`input[type=range]::-webkit-slider-thumb{background:${color};}`}</style>
+      <div style={{display:"flex",justifyContent:"space-between",marginTop:2}}>
+        <span style={{fontSize:9,color:"#ffffff25"}}>{min}m</span>
+        <span style={{fontSize:9,color:"#ffffff25"}}>{max}m</span>
+      </div>
+    </div>
+  );
+}
+
+/* ── Level Editor Sheet ── */
+function EditorSheet({ lv, cfg, onSave, onClose }) {
+  const col = cfg.color;
+  const [d, setD] = useState({...cfg});
+  const set = (k,v) => setD(p=>({...p,[k]:v}));
+  const totalActive = d.yogaMins + d.studyMins * d.studySessions + d.walkMins;
+
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:200,background:"#000000cc",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-end"}}
+      onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{width:"100%",maxWidth:480,margin:"0 auto",background:"#0c0c22",
+        borderRadius:"20px 20px 0 0",border:`1px solid ${col}44`,borderBottom:"none",
+        maxHeight:"92vh",overflowY:"auto",animation:"slideUp .3s ease"}}>
+        <div style={{display:"flex",justifyContent:"center",padding:"10px 0 0"}}>
+          <div style={{width:40,height:4,background:"#ffffff20",borderRadius:2}} />
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 18px 10px"}}>
+          <div>
+            <div style={{fontSize:9,color:col,letterSpacing:1.5,fontWeight:700,textTransform:"uppercase"}}>Editing Level {lv}</div>
+            <div style={{fontSize:17,fontWeight:700,fontFamily:"'Cinzel',serif",color:"#fff"}}>{d.name}</div>
+          </div>
+          <button onClick={onClose} style={{background:"#ffffff15",border:"none",borderRadius:8,width:32,height:32,color:"#fff",fontSize:16,cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{padding:"4px 18px 0"}}>
+          <div style={{background:col+"14",border:`1px solid ${col}33`,borderRadius:10,padding:"10px 12px",marginBottom:16,fontSize:11,color:"#ffffff70",lineHeight:1.8}}>
+            <span style={{color:col,fontWeight:700}}>PREVIEW · </span>
+            💤 {fmt12(d.sleepH,d.sleepM)} → ☀️ {fmt12(d.wakeH,d.wakeM)} &nbsp;|&nbsp;
+            🧘 {d.yogaMins}m · 📖 {d.studyMins}×{d.studySessions} · 🚶 {d.walkMins}m<br/>
+            ⏱ <b style={{color:col}}>{totalActive} min</b> active/day · <b style={{color:col}}>{d.days} days</b>
+          </div>
+          <label style={{fontSize:10,color:"#ffffff50",letterSpacing:1,display:"block",marginBottom:5,textTransform:"uppercase"}}>Level Name</label>
+          <input value={d.name} onChange={e=>set("name",e.target.value)}
+            style={{width:"100%",background:"#ffffff0a",border:`1px solid ${col}44`,borderRadius:8,padding:"9px 12px",color:"#fff",fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",marginBottom:12}} />
+          <label style={{fontSize:10,color:"#ffffff50",letterSpacing:1,display:"block",marginBottom:5,textTransform:"uppercase"}}>Icon (emoji)</label>
+          <input value={d.icon} onChange={e=>set("icon",e.target.value)}
+            style={{width:"100%",background:"#ffffff0a",border:`1px solid ${col}44`,borderRadius:8,padding:"9px 12px",color:"#fff",fontSize:22,textAlign:"center",outline:"none",marginBottom:16}} />
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+            <div>
+              <label style={{fontSize:10,color:"#8B9FE8",letterSpacing:1,display:"block",marginBottom:5,fontWeight:700}}>🌙 SLEEP TIME</label>
+              <input type="time" value={toHHMM(d.sleepH,d.sleepM)}
+                onChange={e=>{const{h,m}=fromHHMM(e.target.value);set("sleepH",h);set("sleepM",m);}}
+                style={{width:"100%",background:"#ffffff0a",border:"1px solid #8B9FE844",borderRadius:8,padding:"9px 10px",color:"#8B9FE8",fontSize:14,fontWeight:700,outline:"none"}} />
+            </div>
+            <div>
+              <label style={{fontSize:10,color:"#8B9FE8",letterSpacing:1,display:"block",marginBottom:5,fontWeight:700}}>🌅 WAKE TIME</label>
+              <input type="time" value={toHHMM(d.wakeH,d.wakeM)}
+                onChange={e=>{const{h,m}=fromHHMM(e.target.value);set("wakeH",h);set("wakeM",m);}}
+                style={{width:"100%",background:"#ffffff0a",border:"1px solid #8B9FE844",borderRadius:8,padding:"9px 10px",color:"#8B9FE8",fontSize:14,fontWeight:700,outline:"none"}} />
+            </div>
+          </div>
+          <SliderRow label="🧘 Yoga" value={d.yogaMins}  min={5} max={180} color="#56E39F" onChange={v=>set("yogaMins",v)} />
+          <SliderRow label="📖 Study per session" value={d.studyMins} min={5} max={180} color="#FFA726" onChange={v=>set("studyMins",v)} />
+          <SliderRow label="🚶 Walk" value={d.walkMins}  min={5} max={180} color="#EC407A" onChange={v=>set("walkMins",v)} />
+          <label style={{fontSize:10,color:"#ffffff50",letterSpacing:1,display:"block",marginBottom:8,textTransform:"uppercase"}}>📚 Study Sessions</label>
+          <div style={{display:"flex",gap:8,marginBottom:16}}>
+            {[1,2,3,4,5,6].map(n=>(
+              <button key={n} onClick={()=>set("studySessions",n)} style={{
+                flex:1,padding:"9px 0",borderRadius:8,border:"none",cursor:"pointer",
+                background:d.studySessions===n?"#FFA726":"#ffffff10",
+                color:d.studySessions===n?"#000":"#ffffff60",
+                fontWeight:700,fontSize:14,fontFamily:"'DM Sans',sans-serif",transition:"all .15s",
+              }}>{n}</button>
+            ))}
+          </div>
+          <label style={{fontSize:10,color:"#ffffff50",letterSpacing:1,display:"block",marginBottom:8,textTransform:"uppercase"}}>📅 Level Duration (days)</label>
+          <div style={{display:"flex",gap:8,marginBottom:22}}>
+            {[7,10,14,15,21,30].map(n=>(
+              <button key={n} onClick={()=>set("days",n)} style={{
+                flex:1,padding:"9px 0",borderRadius:8,border:"none",cursor:"pointer",
+                background:d.days===n?col:"#ffffff10",
+                color:d.days===n?"#000":"#ffffff60",
+                fontWeight:700,fontSize:12,fontFamily:"'DM Sans',sans-serif",transition:"all .15s",
+              }}>{n}d</button>
+            ))}
+          </div>
+          <button onClick={()=>onSave(d)} style={{
+            width:"100%",padding:"15px",border:"none",borderRadius:12,
+            background:`linear-gradient(135deg,${col},${col}bb)`,
+            color:"#000",fontSize:15,fontWeight:700,fontFamily:"'DM Sans',sans-serif",
+            cursor:"pointer",boxShadow:`0 4px 20px ${col}44`,marginBottom:6,
+          }}>💾 Save Level {lv}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── App ── */
+function App() {
+  const [user, setUser]       = useState(null);
+  const [view, setView]       = useState("today");
+  const [prog, setProg]       = useState(null);
+  const [cfgs, setCfgs]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [celebrating, setCelebrating] = useState(false);
+  const [justDone, setJustDone]       = useState(false);
+  const [editing, setEditing] = useState(null);
+
+  // --- 1. CLOUD SYNC LOGIC ---
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (u) => {
+      if (u) {
+        setUser(u);
+        const doc = await db.collection("users").doc(u.uid).get();
+        if (doc.exists) {
+          setProg(doc.data().progress);
+          setCfgs(doc.data().configs);
+        } else {
+          const p = {...DEFAULT_PROGRESS};
+          const c = makeDefaultConfigs();
+          setProg(p); setCfgs(c);
+          await db.collection("users").doc(u.uid).set({ progress: p, configs: c });
+        }
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const syncToCloud = async (newProg, newCfgs) => {
+    if (!user) return;
+    await db.collection("users").doc(user.uid).update({
+      progress: newProg || prog,
+      configs: newCfgs || cfgs
+    });
+  };
+
+  if (loading) return (
+    <div style={{background:"#050514",height:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+      <div style={{fontSize:48,color:"#D4AF37",animation:"spin 2s linear infinite"}}>✦</div>
+      <p style={{color:"#D4AF37",fontFamily:"'Cinzel',serif",marginTop:16,letterSpacing:2}}>Connecting to Cloud…</p>
+    </div>
+  );
+
+  // --- 2. LOGIN VIEW ---
+  if (!user) {
+    return (
+      <div className="auth-overlay">
+        <div className="login-card">
+          <div style={{fontSize:50, marginBottom:10}}>🌱</div>
+          <h1 style={{fontFamily:"'Cinzel'", color:"#D4AF37", fontSize:26}}>Life Changer</h1>
+          <p style={{color:"#ffffff70", fontSize:13, marginTop:10}}>Sign in to sync your 225-day study & transformation journey.</p>
+          <button className="btn-login" onClick={() => auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())}>
+            Sign in with Google
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const { currentLevel: lv, currentDay: day } = prog;
+  const cfg     = cfgs[lv];
+  const accent  = cfg.color;
+  const tasks   = buildTasks(cfg);
+  const dayKey  = `L${lv}_D${day}`;
+  const checked = prog.tasks?.[dayKey] || {};
+  const doneN   = tasks.filter(t=>checked[t.id]).length;
+  const allDone = doneN === tasks.length;
+  const lvDays  = cfg.days || 15;
+  const lvlPct  = ((day-1)/lvDays)*100;
+  const totalPoss = Object.values(cfgs).reduce((a,c)=>a+(c.days||15),0);
+  const doneTotal = Object.keys(cfgs).slice(0,lv-1).reduce((a,k)=>a+(cfgs[k]?.days||15),0) + (day-1);
+  const overallPct = Math.round((doneTotal/totalPoss)*100);
+
+  const toggle = id => {
+    const ns={...prog,tasks:{...prog.tasks,[dayKey]:{...checked,[id]:!checked[id]}}};
+    setProg(ns); syncToCloud(ns, null);
+  };
+
+  const completeDay = () => {
+    if (!allDone) return;
+    let nl=lv, nd=day+1, cl=[...(prog.completedLevels||[])];
+    if (nd>lvDays) { cl.push(nl); nl=Math.min(nl+1,TOTAL_LEVELS); nd=1; setCelebrating(true); setTimeout(()=>setCelebrating(false),3500); }
+    setJustDone(true); setTimeout(()=>setJustDone(false),2000);
+    const ns={...prog,currentLevel:nl,currentDay:nd,completedLevels:cl};
+    setProg(ns); syncToCloud(ns, null);
+  };
+
+  const saveLevel = (lvNum, newCfg) => {
+    const nc={...cfgs,[lvNum]:{...cfgs[lvNum],...newCfg}};
+    setCfgs(nc); syncToCloud(null, nc); setEditing(null);
+  };
+
+  const card = (ex={}) => ({background:"#ffffff08",border:`1px solid ${accent}44`,borderRadius:14,padding:14,backdropFilter:"blur(8px)",...ex});
+
+  return (
+    <div style={{background:"#050514",minHeight:"100vh",fontFamily:"'DM Sans',sans-serif",color:"#fff",overflowX:"hidden"}}>
+      <Confetti active={celebrating} color={accent} />
+      {editing && <EditorSheet lv={editing} cfg={cfgs[editing]} onSave={c=>saveLevel(editing,c)} onClose={()=>setEditing(null)} />}
+      <div style={{position:"fixed",inset:0,background:"radial-gradient(ellipse at 15% 50%,#1a1a3e 0%,transparent 60%),radial-gradient(ellipse at 85% 15%,#0d1b3e 0%,transparent 55%)",pointerEvents:"none",zIndex:0}} />
+
+      <header style={{position:"relative",zIndex:1,display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 16px 12px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:26}}>{cfg.icon}</span>
+          <div>
+            <div style={{display:"inline-block",fontSize:9,fontWeight:700,letterSpacing:2,padding:"3px 8px",borderRadius:4,fontFamily:"'Cinzel',serif",background:accent+"22",border:`1px solid ${accent}66`,color:accent,marginBottom:3}}>
+              LEVEL {lv} · DAY {day}/{lvDays}
+            </div>
+            <div style={{fontSize:17,fontWeight:700,fontFamily:"'Cinzel',serif",color:accent,letterSpacing:.3}}>{cfg.name}</div>
+          </div>
+        </div>
+        <div style={{textAlign:"center",fontFamily:"'Cinzel',serif"}}>
+          <div style={{fontSize:22,fontWeight:700,color:"#D4AF37",lineHeight:1}}>{overallPct}%</div>
+          <div style={{fontSize:9,color:"#ffffff60",letterSpacing:1,marginTop:2}}>JOURNEY</div>
+        </div>
+      </header>
+
+      <div style={{height:3,background:"#ffffff1
